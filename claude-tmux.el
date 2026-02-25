@@ -1,10 +1,13 @@
 ;;; claude-tmux.el --- Send current file reference to a Claude tmux pane -*- lexical-binding: t; -*-
+
 ;; Author: Cao Tan Duc <ductancao.work@gmail.com>
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "28.1"))
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/caotanduc/claude-tmux
-;;
+
+;;; Commentary:
+
 ;; Drop this file somewhere in your load-path, then:
 ;;   (require 'claude-tmux)
 ;;
@@ -16,8 +19,11 @@
 ;;
 ;; Behavior:
 ;; - Computes absolute + project-relative path for the current buffer file.
-;; - Tries to find a tmux pane running a process whose args contain the word "claude".
-;; - If not found: creates a new tmux pane, optionally starts `claude`, then sends the file reference.
+;; - Tries to find a tmux pane running a process whose args contain "claude".
+;; - If not found: creates a new tmux pane, optionally starts claude, then
+;;   sends the file reference.
+
+;;; Code:
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -27,12 +33,12 @@
   :group 'tools)
 
 (defcustom claude-tmux-claude-regexp "\\bclaude\\b"
-  "Regexp used to detect a running Claude process from `ps` output."
+  "Regexp used to detect a running Claude process from `ps' output."
   :type 'regexp
   :group 'claude-tmux)
 
 (defcustom claude-tmux-create-pane-args '("-h")
-  "Args passed to `tmux split-window` when creating a new pane.
+  "Arguments passed to tmux `split-window' when creating a new pane.
 Common values:
   '(\"-h\") horizontal split
   '(\"-v\") vertical split
@@ -41,12 +47,12 @@ You may also add \"-p\" \"30\" etc."
   :group 'claude-tmux)
 
 (defcustom claude-tmux-start-claude-in-new-pane t
-  "If non-nil, send `claude` + Enter to the newly created pane before sending the reference."
+  "If non-nil, send `claude' + Enter to the newly created pane before sending the reference."
   :type 'boolean
   :group 'claude-tmux)
 
 (defcustom claude-tmux-claude-command "claude"
-  "Command to run in a newly created pane when `claude-tmux-start-claude-in-new-pane` is non-nil."
+  "Command to run in a newly created pane when `claude-tmux-start-claude-in-new-pane' is non-nil."
   :type 'string
   :group 'claude-tmux)
 
@@ -68,7 +74,7 @@ Example: \"@file:%s\" or \"%s\"."
   :group 'claude-tmux)
 
 (defcustom claude-tmux-tmux-binary "tmux"
-  "tmux executable name/path."
+  "Name or path of the tmux executable."
   :type 'string
   :group 'claude-tmux)
 
@@ -77,7 +83,7 @@ Example: \"@file:%s\" or \"%s\"."
   (getenv "TMUX"))
 
 (defun claude-tmux--call (prog &rest args)
-  "Run PROG ARGS and return stdout as string (trimmed). Signal error on nonzero exit."
+  "Run PROG ARGS and return stdout as string (trimmed).  Signal error on nonzero exit."
   (let* ((buf (generate-new-buffer " *claude-tmux*"))
          (status (unwind-protect
                      (apply #'call-process prog nil buf nil args)
@@ -119,7 +125,7 @@ Example: \"@file:%s\" or \"%s\"."
   ;; target \t pid \t window_name \t pane_title \t pane_current_path
   (let* ((fmt "#{session_name}:#{window_index}.#{pane_index}\t#{pane_pid}\t#{window_name}\t#{pane_title}\t#{pane_current_path}")
          (out (claude-tmux--call-noerror claude-tmux-tmux-binary "list-panes" "-s" "-F" fmt)))
-    (unless out (error "tmux not available or not running"))
+    (unless out (error "Tmux not available or not running"))
     (let ((lines (split-string out "\n" t))
           (acc nil))
       (dolist (line lines (nreverse acc))
@@ -134,12 +140,14 @@ Example: \"@file:%s\" or \"%s\"."
                     acc))))))))
 
 (defun claude-tmux--ps-list ()
-  "Return a hash table pid(int) -> plist(:ppid int :args string)."
+  "Return a hash table mapping PID (integer) to process info plist."
   (let* ((user (user-login-name))
-         (out (or (claude-tmux--call-noerror "ps" "-u" user "-ww" "-o" "pid,ppid,args")
-                  (error "Failed to run ps"))))
+         (fields "pid,ppid,args")
+         (raw (apply #'claude-tmux--call-noerror
+                     (list "ps" "-u" user "-ww" "-o" fields))))
+    (unless raw (error "Failed to run ps"))
     (let ((ht (make-hash-table :test 'eql))
-          (lines (split-string out "\n" t)))
+          (lines (split-string raw "\n" t)))
       ;; Skip header
       (dolist (line (cdr lines) ht)
         (when (string-match "^\\s-*\\([0-9]+\\)\\s-+\\([0-9]+\\)\\s-+\\(.*\\)$" line)
@@ -176,7 +184,7 @@ Example: \"@file:%s\" or \"%s\"."
     (nreverse found)))
 
 (defun claude-tmux--choose-pane (panes)
-  "Prompt user to choose from PANES (list of plists). Return chosen pane plist."
+  "Prompt user to choose from PANES (list of plists).  Return chosen pane plist."
   (cond
    ((null panes) nil)
    ((= (length panes) 1) (car panes))
@@ -208,7 +216,7 @@ Example: \"@file:%s\" or \"%s\"."
     target))
 
 (defun claude-tmux--send-keys (target text &optional press-enter)
-  "Send TEXT to tmux pane TARGET. If PRESS-ENTER is non-nil, also press Enter."
+  "Send TEXT to tmux pane TARGET.  If PRESS-ENTER is non-nil, also press Enter."
   (let ((args (append (list "send-keys" "-t" target text)
                       (when press-enter (list "Enter")))))
     (apply #'claude-tmux--call claude-tmux-tmux-binary args)))
@@ -222,7 +230,9 @@ Example: \"@file:%s\" or \"%s\"."
   (format claude-tmux-file-reference-format path))
 
 (defun claude-tmux--select-path (&optional force-absolute force-relative)
-  "Pick which path to use for current buffer."
+  "Pick which path to use for current buffer.
+If FORCE-ABSOLUTE is non-nil, always return the absolute path.
+If FORCE-RELATIVE is non-nil, prefer the project-relative path."
   (let* ((pp (claude-tmux--paths-for-current-buffer))
          (abs (plist-get pp :abs))
          (rel (plist-get pp :rel)))
@@ -235,10 +245,12 @@ Example: \"@file:%s\" or \"%s\"."
 ;;;###autoload
 (defun claude-tmux-send-file-reference (&optional force-absolute)
   "Send a file reference for the current buffer to a Claude tmux pane.
-With prefix arg FORCE-ABSOLUTE (C-u), send absolute path even if project-relative exists.
 
-If no Claude pane is found, create a new tmux pane, optionally start `claude`,
-then send the file reference."
+If FORCE-ABSOLUTE is non-nil (prefix arg \\[universal-argument]), send the
+absolute path even when a project-relative path is available.
+
+If no Claude pane is found, create a new tmux pane, optionally start
+`claude', then send the file reference."
   (interactive "P")
   (let* ((path (claude-tmux--select-path force-absolute nil))
          (text (claude-tmux--build-reference path))
@@ -269,7 +281,7 @@ then send the file reference."
   (let ((claude-tmux-prefer-project-relative t))
     (claude-tmux-send-file-reference nil)))
 
-;;; Transient dispatch (transient is bundled with Emacs 29+)
+;;; Transient dispatch (transient is bundled with Emacs 28.1+)
 
 (when (require 'transient nil t)
 
