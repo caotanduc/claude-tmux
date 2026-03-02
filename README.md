@@ -29,7 +29,8 @@ Or with `use-package`:
 
 ```elisp
 (use-package claude-tmux
-  :load-path "/path/to/claude-tmux"
+  :vc (:url "https://github.com/caotanduc/claude-tmux"
+	    :rev :newest)
   :custom
   ;; Send project-relative path when available, else fall back to absolute
   (claude-tmux-prefer-project-relative t)
