@@ -63,6 +63,13 @@ Example: \"@file:%s\" or \"%s\"."
   :type 'string
   :group 'claude-tmux)
 
+(defcustom claude-tmux-file-reference-lines-format "@%s:%d:%d"
+  "Format string used when sending a file reference with a line range.
+It receives %s (path), %d (first line), %d (last line).
+Example: \"@%s:%d:%d\" produces \"@src/foo.el:10:20\"."
+  :type 'string
+  :group 'claude-tmux)
+
 (defcustom claude-tmux-prefer-project-relative t
   "If non-nil, send project-relative path when available, else absolute path."
   :type 'boolean
@@ -229,6 +236,19 @@ Example: \"@file:%s\" or \"%s\"."
   "Return the outgoing text for PATH."
   (format claude-tmux-file-reference-format path))
 
+(defun claude-tmux--region-lines ()
+  "Return (FIRST-LINE . LAST-LINE) for the active region, or nil if no region."
+  (when (use-region-p)
+    (let* ((beg (region-beginning))
+           (end (region-end))
+           (first (line-number-at-pos beg))
+           ;; If end is at column 0, it belongs to the previous line visually.
+           (last (save-excursion
+                   (goto-char end)
+                   (if (bolp) (max first (1- (line-number-at-pos end)))
+                     (line-number-at-pos end)))))
+      (cons first last))))
+
 (defun claude-tmux--select-path (&optional force-absolute force-relative)
   "Pick which path to use for current buffer.
 If FORCE-ABSOLUTE is non-nil, always return the absolute path.
@@ -281,6 +301,34 @@ If no Claude pane is found, create a new tmux pane, optionally start
   (let ((claude-tmux-prefer-project-relative t))
     (claude-tmux-send-file-reference nil)))
 
+;;;###autoload
+(defun claude-tmux-send-file-reference-with-lines (&optional force-absolute)
+  "Send a file reference with line range for the current buffer to a Claude tmux pane.
+
+When the region is active, sends `claude-tmux-file-reference-lines-format'
+formatted with the path and the first/last line of the region.
+When no region is active, falls back to `claude-tmux-send-file-reference'.
+
+If FORCE-ABSOLUTE is non-nil (prefix arg \\[universal-argument]), send the
+absolute path even when a project-relative path is available."
+  (interactive "P")
+  (let ((lines (claude-tmux--region-lines)))
+    (if (null lines)
+        (claude-tmux-send-file-reference force-absolute)
+      (let* ((path (claude-tmux--select-path force-absolute nil))
+             (text (format claude-tmux-file-reference-lines-format
+                           path (car lines) (cdr lines)))
+             (panes (claude-tmux--claude-panes))
+             (pane (claude-tmux--choose-pane panes))
+             (target (or (and pane (plist-get pane :target))
+                         (claude-tmux--create-pane))))
+        (when (and (not pane) claude-tmux-start-claude-in-new-pane)
+          (claude-tmux--send-keys target claude-tmux-claude-command t))
+        (claude-tmux--send-keys target text t)
+        (when claude-tmux-switch-after-send
+          (claude-tmux--switch-to-pane target))
+        (message "Sent to tmux %s: %s" target text)))))
+
 ;;; Transient dispatch (transient is bundled with Emacs 28.1+)
 
 (when (require 'transient nil t)
@@ -329,9 +377,10 @@ If no Claude pane is found, create a new tmux pane, optionally start
      ("s" claude-tmux--toggle-switch-after-send)
      ("c" claude-tmux--toggle-start-claude)]
     ["Send"
-     ("f" "Send file reference (smart)"  claude-tmux-send-file-reference)
-     ("a" "Send absolute path"           claude-tmux-send-absolute-path)
-     ("p" "Send project-relative path"   claude-tmux-send-project-relative-path)]))
+     ("f" "Send file reference (smart)"   claude-tmux-send-file-reference)
+     ("l" "Send with line range (region)" claude-tmux-send-file-reference-with-lines)
+     ("a" "Send absolute path"            claude-tmux-send-absolute-path)
+     ("p" "Send project-relative path"    claude-tmux-send-project-relative-path)]))
 
 (provide 'claude-tmux)
 ;;; claude-tmux.el ends here

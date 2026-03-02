@@ -46,6 +46,7 @@ Or with `use-package`:
   (claude-tmux-claude-command "claude")
   :bind
   ("C-c c f" . claude-tmux-send-file-reference)
+  ("C-c c l" . claude-tmux-send-file-reference-with-lines)
   ("C-c c t" . claude-tmux-dispatch))
 ```
 
@@ -55,10 +56,13 @@ Or with `use-package`:
 |---|---|
 | `M-x claude-tmux-dispatch` | Open the transient menu (recommended entry point) |
 | `M-x claude-tmux-send-file-reference` | Send smart path (project-relative if available, else absolute) |
+| `M-x claude-tmux-send-file-reference-with-lines` | Send path with line range when region is active (e.g. `@src/foo.el:10:20`) |
 | `M-x claude-tmux-send-absolute-path` | Always send the absolute path |
 | `M-x claude-tmux-send-project-relative-path` | Send project-relative path, falling back to absolute |
 
-For `claude-tmux-send-file-reference`, passing a prefix argument (`C-u`) forces an absolute path even when a project-relative path is available.
+For `claude-tmux-send-file-reference` and `claude-tmux-send-file-reference-with-lines`, passing a prefix argument (`C-u`) forces an absolute path even when a project-relative path is available.
+
+`claude-tmux-send-file-reference-with-lines` uses `claude-tmux-file-reference-lines-format` when a region is active, and falls back to the normal `claude-tmux-send-file-reference` behavior when there is no active region.
 
 ### Transient menu
 
@@ -72,6 +76,7 @@ Options
 
 Send
   f  Send file reference (smart)
+  l  Send with line range (region)
   a  Send absolute path
   p  Send project-relative path
 ```
@@ -109,6 +114,12 @@ Arguments passed to `tmux split-window` when creating a new pane. Use `'("-v")` 
 Default: `" %s"`
 
 Format string for the text sent to the pane. The single `%s` is replaced with the chosen path. For example, set it to `"@%s"` if you want the reference prefixed with `@`.
+
+### claude-tmux-file-reference-lines-format
+
+Default: `"@%s:%d:%d"`
+
+Format string used by `claude-tmux-send-file-reference-with-lines` when a region is active. The arguments are the path (`%s`), the first line (`%d`), and the last line (`%d`). The default produces references like `@src/foo.el:10:20`, which Claude Code recognises as a file-range mention.
 
 ### claude-tmux-claude-regexp
 
