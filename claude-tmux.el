@@ -3,8 +3,8 @@
 ;; Copyright (C) 2026 Cao Tan Duc
 
 ;; Author: Cao Tan Duc <ductancao.work@gmail.com>
-;; Version: 0.1.4
-;; Package-Version: 0.1.4
+;; Version: 0.1.5
+;; Package-Version: 0.1.5
 ;; Package-Requires: ((emacs "28.1"))
 ;; Keywords: tools, convenience
 ;; URL: https://github.com/caotanduc/claude-tmux
@@ -98,6 +98,12 @@ Example:
 
 (defcustom claude-tmux-prefer-project-relative t
   "If non-nil, prefer project-relative paths when available."
+  :type 'boolean
+  :group 'claude-tmux)
+
+(defcustom claude-tmux-press-enter-after-send t
+  "If non-nil, press Enter after sending the file reference to tmux.
+When nil, the text is typed into the pane but not submitted."
   :type 'boolean
   :group 'claude-tmux)
 
@@ -326,7 +332,7 @@ If no Claude pane is found, create a new tmux pane, optionally start
       (claude-tmux--send-keys target claude-tmux-claude-command t)
       ;; (optional) small pause could be added, but avoid async/estimates; keep simple.
       )
-    (claude-tmux--send-keys target text t)
+    (claude-tmux--send-keys target text claude-tmux-press-enter-after-send)
     (when claude-tmux-switch-after-send
       (claude-tmux--switch-to-pane target))
     (message "Sent to tmux %s: %s" target text)))
@@ -374,7 +380,7 @@ absolute path even when a project-relative path is available."
                          (claude-tmux--create-pane))))
         (when (and (not pane) claude-tmux-start-claude-in-new-pane)
           (claude-tmux--send-keys target claude-tmux-claude-command t))
-        (claude-tmux--send-keys target text t)
+        (claude-tmux--send-keys target text claude-tmux-press-enter-after-send)
         (when claude-tmux-switch-after-send
           (claude-tmux--switch-to-pane target))
         (message "Sent to tmux %s: %s" target text)))))

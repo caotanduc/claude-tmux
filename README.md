@@ -39,6 +39,8 @@ Or with `use-package`:
   (claude-tmux-file-reference-format " %s")
   ;; Automatically run `claude` in a newly created pane before sending the reference
   (claude-tmux-start-claude-in-new-pane t)
+  ;; Press Enter after sending to submit the text (set nil to just type without submitting)
+  (claude-tmux-press-enter-after-send t)
   ;; Switch tmux focus to the Claude pane after sending
   (claude-tmux-switch-after-send nil)
   ;; Direction of the new pane: "-h" horizontal, "-v" vertical
@@ -97,6 +99,12 @@ When non-nil, send the project-relative path when one is available. Falls back t
 Default: `t`
 
 When non-nil, send the command in `claude-tmux-claude-command` followed by Enter to a newly created pane before sending the file reference.
+
+### claude-tmux-press-enter-after-send
+
+Default: `t`
+
+When non-nil, press Enter after sending the file reference to submit it immediately. When nil, the text is typed into the pane but not submitted, allowing you to append more text before pressing Enter manually.
 
 ### claude-tmux-switch-after-send
 
